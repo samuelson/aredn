@@ -1,0 +1,20 @@
+//
+// Don't reopen babel's netlink socket when it is already open.
+// A double kernel_setup_socket(1) at startup orphans the first socket
+// and leaks kernel memory.
+// https://github.com/aredn/aredn_packages/pull/270
+// https://github.com/jech/babeld/issues/127
+//
+--- a/feeds/arednpackages/net/babel/files/kernel_netlink.c
++++ b/feeds/arednpackages/net/babel/files/kernel_netlink.c
+@@ -711,6 +711,10 @@ kernel_setup_socket(int setup)
+     int rc;
+ 
+     if(setup) {
++        /* Don't reopen */
++        if(nl_listen.sock >= 0) {
++            return 1;
++        }
+         rc = netlink_socket(&nl_listen,
+                             rtnlgrp_to_mask(RTNLGRP_IPV6_ROUTE)
+                           | rtnlgrp_to_mask(RTNLGRP_IPV4_ROUTE)

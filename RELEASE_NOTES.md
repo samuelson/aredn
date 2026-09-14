@@ -1,5 +1,9 @@
 __RELEASE NOTES__
 
+# 4.26.7.1
+
+* Fix babel/kernel memory leak from a double `kernel_setup_socket()` at startup. [\#270](https://github.com/aredn/aredn_packages/pull/270) [jech/babeld\#127](https://github.com/jech/babeld/issues/127)
+
 # 4.26.7.0
 
 AREDN production release 4.26.7.0 is now available
