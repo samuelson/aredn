@@ -1,0 +1,55 @@
+--- /dev/null
++++ b/package/kernel/ath10k-ct/patches/999-0010-ath10k-ct-recovery-guards.patch
+@@ -0,0 +1,52 @@
++From: Denis Yarkovoy <dyarkovoy@gmail.com>
++Subject: [PATCH] wifi: ath10k-ct: recovery-path NULL guards
++
++During firmware recovery on QCA4019 (e.g. MikroTik hAP ac3), ath10k can
++still walk beaconing vif state while an ath10k_vif has already lost its
++owning ath10k pointer. Guard arvif->ar before taking ar->data_lock.
++
++Also guard empty RX ring slots in ath10k_htt_rx_netbuf_pop() so a NULL
++skb is not DMA-unmapped during recovery.
++
++Upstream: greearb/ath10k-ct#234 / OpenWrt #22793 / OpenWrt PR #24103
++
++Signed-off-by: Denis Yarkovoy <dyarkovoy@gmail.com>
++---
++--- a/ath10k-6.18/wmi.c
+++++ b/ath10k-6.18/wmi.c
++@@ -1949,9 +1949,14 @@ static void ath10k_wmi_tx_beacon_nowait(struct ath10k_vif *arvif)
++ 	/* Crash was seen here after FW crash.  ar and/or arvif were effectively NULL. */
++ 	if ((unsigned long)(arvif) < 8000) {
++-		pr_err("wmi-tx-beacon-nowait, arvif: %p\n", arvif);
+++		pr_err("wmi-tx-beacon-nowait, arvif too small: %p\n", arvif);
++ 		WARN_ON_ONCE(1);
++ 		return;
++ 	}
++ 
++ 	ar = arvif->ar;
+++	if (!ar || (unsigned long)(ar) < 8000) {
+++		pr_err("wmi-tx-beacon-nowait, ar invalid: arvif=%p ar=%p\n", arvif, ar);
+++		WARN_ON_ONCE(1);
+++		return;
+++	}
++ 	spin_lock_bh(&ar->data_lock);
++ 
++ 	bcn = arvif->beacon;
++--- a/ath10k-6.18/htt_rx.c
+++++ b/ath10k-6.18/htt_rx.c
++@@ -341,6 +341,15 @@ static inline struct sk_buff *ath10k_htt_rx_netbuf_pop(struct ath10k_htt *htt)
++ 	idx = htt->rx_ring.sw_rd_idx.msdu_payld;
++ 	msdu = htt->rx_ring.netbufs_ring[idx];
++ 	htt->rx_ring.netbufs_ring[idx] = NULL;
+++	if (!msdu) {
+++		ath10k_warn(ar, "rx ring slot %d empty while popping netbuf\n", idx);
+++		ath10k_htt_reset_paddrs_ring(htt, idx);
+++		idx++;
+++		idx &= htt->rx_ring.size_mask;
+++		htt->rx_ring.sw_rd_idx.msdu_payld = idx;
+++		htt->rx_ring.fill_cnt--;
+++		return NULL;
+++	}
++ 	ath10k_htt_reset_paddrs_ring(htt, idx);
++ 
++ 	idx++;
