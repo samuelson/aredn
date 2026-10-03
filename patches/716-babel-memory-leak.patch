@@ -1,0 +1,23 @@
+//
+// Avoid calling kernel_setup_socket twice at babel startup.
+// The duplicate kernel_setup_socket(1) orphans the first netlink socket
+// and leaks kernel memory.
+// https://github.com/aredn/aredn_packages/pull/288
+// https://github.com/jech/babeld/issues/127
+// https://github.com/jech/babeld/commit/5329cd89cd3dfe74b18f19d3a64934324687866a
+//
+--- a/feeds/arednpackages/net/babel/files/babeld.c
++++ b/feeds/arednpackages/net/babel/files/babeld.c
+@@ -550,12 +550,6 @@ babel_main(char **interface_names, int num_interface_names)
+     }
+ #endif
+ 
+-    rc = kernel_setup_socket(1);
+-    if(rc < 0 || kernel_socket < 0) {
+-        perror("Couldn't setup kernel socket");
+-        goto fail;
+-    }
+-
+     if(local_server_port >= 0) {
+         local_server_socket = tcp_server_socket(local_server_port, 1);
+         if(local_server_socket < 0) {
